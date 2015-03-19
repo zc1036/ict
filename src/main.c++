@@ -48,7 +48,9 @@ namespace ictest {
 
     template<typename T>
     cl_object convert_c_to_cl(T&& t) {
-        return ecl_make_foreign_data(Cnil, sizeof(userdata<T>), new userdata<T>(std::forward<T>(t)));
+        return ecl_make_foreign_data(c_string_to_object(typeid(t).name()),
+                                     sizeof(userdata<T>),
+                                     new userdata<T>(std::forward<T>(t)));
     }
 
     cl_object convert_c_to_cl(int n) {
@@ -58,31 +60,27 @@ namespace ictest {
     std::vector<std::function<cl_object(int, cl_va_list)>> funcs;
 
     template<typename T>
-    struct cl_to_c_converter {
-        static T convert(cl_object obj) {
-            TYPE_ASSERT(ECL_FOREIGN_DATA_P(obj), "Expected foreign data");
-            TYPE_ASSERT(obj->foreign.size == sizeof(userdata<T>), "Expected userdata<T>");
+    T convert_cl_to_c(cl_object obj) {
+        TYPE_ASSERT(ECL_FOREIGN_DATA_P(obj), "Expected foreign data");
+        TYPE_ASSERT(obj->foreign.size == sizeof(userdata<T>), "Expected userdata<T>");
 
-            auto gen_ptr = reinterpret_cast<gen_userdata*>(ecl_to_pointer(obj));
+        auto gen_ptr = reinterpret_cast<gen_userdata*>(ecl_to_pointer(obj));
 
-            TYPE_ASSERT(gen_ptr->magic_header == gen_userdata::magic_value, "Invalid magic header in userdata");
+        TYPE_ASSERT(gen_ptr->magic_header == gen_userdata::magic_value, "Invalid magic header in userdata");
 
-            auto ptr = gen_ptr->try_cast<T>();
+        auto ptr = gen_ptr->try_cast<T>();
 
-            TYPE_ASSERT(ptr != nullptr, "Invalid userdata type");
+        TYPE_ASSERT(ptr != nullptr, "Invalid userdata type");
 
-            return ptr->data;
-        }
-    };
+        return *ptr;
+    }
 
     template<>
-    struct cl_to_c_converter<int> {
-        static int convert(cl_object obj) {
-            TYPE_ASSERT(FIXNUMP(obj), "Expected integer");
+    int convert_cl_to_c<int>(cl_object obj) {
+        TYPE_ASSERT(FIXNUMP(obj), "Expected integer");
 
-            return fix(obj);
-        }
-    };
+        return fix(obj);
+    }
 
     /*
     template<typename FnRet, typename... FnArgs>
@@ -115,8 +113,8 @@ namespace ictest {
             return call_from_va_list<Fn, ToBeConverted...>::call(std::forward<Fn>(fn),
                                                                  numargs - 1,
                                                                  list,
-                                                                 cl_to_c_converter<T>::convert(cl_va_arg(list)),
-                                                                 std::forward<AlreadyConverted>(already_converted)...);
+                                                                 std::forward<AlreadyConverted>(already_converted)...,
+                                                                 convert_cl_to_c<T>(cl_va_arg(list)));
         }
     };
 
@@ -303,8 +301,20 @@ struct S {
     int x, y, z;
 };
 
-S foo() {
-    return { 1, 2, 3 };
+S foo(int x, int y, int z) {
+    return { x, y, z };
+}
+
+int foo_x(S s) {
+    return s.x;
+}
+
+int foo_y(S s) {
+    return s.y;
+}
+
+int foo_z(S s) {
+    return s.z;
 }
 
 extern "C" int main(/*const int argc, const char* const argv[]*/) {
@@ -324,7 +334,10 @@ extern "C" int main(/*const int argc, const char* const argv[]*/) {
     }
 
     ictest::register_funcs({
-            { fun(foo), "FOO" }
+            { fun(foo), "FOO" },
+            { fun(foo_x), "FOO-X" },
+            { fun(foo_y), "FOO-Y" },
+            { fun(foo_z), "FOO-Z" }
         });
 
     auto closure = ecl_make_cclosure_va(f, c_string_to_object("((HI . 534))"), Cnil);
