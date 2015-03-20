@@ -12,9 +12,9 @@ namespace ictest {
         using std::runtime_error::runtime_error;
     };
 
-#define TYPE_ASSERT(EXPR, ERRMSG)               \
-    if (!(EXPR))                                \
-        throw type_mismatch(ERRMSG)
+#define TYPE_ASSERT(EXPR, ERRMSG)                                       \
+    if (!(EXPR))                                                        \
+        cl_error(1, ecl_make_simple_base_string(strdup(ERRMSG), -1))
 
     struct gen_userdata {
         gen_userdata(const std::size_t hash, const char* const name)
@@ -107,8 +107,7 @@ namespace ictest {
     struct call_from_va_list<Fn, T, ToBeConverted...> {
         template<typename... AlreadyConverted>
         static cl_object call(Fn&& fn, cl_narg numargs, cl_va_list list, AlreadyConverted&&... already_converted) {
-            if (numargs < 1)
-                throw type_mismatch("Not enough arguments to function");
+            TYPE_ASSERT(numargs > 0, "Not enough arguments to function");
 
             return call_from_va_list<Fn, ToBeConverted...>::call(std::forward<Fn>(fn),
                                                                  numargs - 1,
@@ -122,8 +121,7 @@ namespace ictest {
     struct call_from_va_list<Fn> {
         template<typename... AlreadyConverted>
         static cl_object call(Fn&& fn, cl_narg numargs, cl_va_list, AlreadyConverted&&... already_converted) {
-            if (numargs != 0)
-                throw type_mismatch("Too many arguments to function");
+            TYPE_ASSERT(numargs == 0, "Too many arguments to function");
 
             return convert_c_to_cl(fn(already_converted...));
         }
@@ -197,30 +195,6 @@ namespace ictest {
       });
 
      */
-}
-
-namespace {
-    cl_object ecl_call(const char* const call) {
-        return cl_safe_eval(c_string_to_object(call), Cnil, Cnil);
-    }
-
-    cl_object f(long nargs, ...) {
-        std::cout << nargs << std::endl;
-
-        std::cout << "has value? " << std::endl;
-        cl_print(1, cl_safe_eval(ecl_call("(read)"), si_environ(), Cnil));
-        std::cout << "\ndone" << std::endl;
-
-        return Cnil;
-    }
-
-    bool repl_continue = true;
-
-    cl_object exit_func() {
-        repl_continue = false;
-
-        return Cnil;
-    }
 }
 
 // cl_object cl_s2f(cl_object lol) {
@@ -340,22 +314,5 @@ extern "C" int main(/*const int argc, const char* const argv[]*/) {
             { fun(foo_z), "FOO-Z" }
         });
 
-    auto closure = ecl_make_cclosure_va(f, c_string_to_object("((HI . 534))"), Cnil);
-    ecl_defparameter(c_string_to_object("HILOL"), closure);
-
-    cl_def_c_function(c_string_to_object("EXIT"), exit_func, 0);
-    //cl_def_c_function(c_string_to_object("CL-S2F"), c_string_to_object, 1);
-
-    std::cout << "ICTEST\n"
-                 "call EXIT to quit\n\n";
-
-    std::size_t inputno = 1;
-
-    do {
-        std::cout << inputno++ << " > " << std::flush;
-
-        cl_print(1, cl_safe_eval(ecl_call("(read)"), Cnil, Cnil));
-
-        std::cout << "\n";
-    } while (repl_continue);
+    cl_eval(c_string_to_object("(si:top-level t)"));
 }
