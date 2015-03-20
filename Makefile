@@ -1,10 +1,10 @@
 
 CC := g++
-FLAGS := -Wall -std=c++1y -fPIC -pie -rdynamic
+FLAGS := -Wall -std=c++1y -fPIC -pie -rdynamic -Iinclude
 
-HEADERS := Makefile
+HEADERS := Makefile include/ict/ict.h++ include/ict/internal/dll.h++
 OBJECTS := main.o
-BIN := bin/ictest-dbg
+BIN := bin/ict-dbg
 
 LIBRARIES := -ldl -lecl -lgc
 
