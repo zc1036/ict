@@ -131,20 +131,52 @@ namespace ict {
         }
     };
 
-    struct func_info {
+    namespace internal {
+        template<typename T, typename Ret, typename... Args>
+        Ret ret_type(Ret(T::*)(Args...));
+
+        template<typename... Args>
+        struct std_function_type;
+
+        template<typename T, typename Ret, typename... Args>
+        struct std_function_type<Ret(T::*)(Args...)> {
+            using type = std::function<Ret(Args...)>;
+        };
+
+        template<typename T, typename Ret, typename... Args>
+        struct std_function_type<Ret(T::*)(Args...) const> {
+            using type = std::function<Ret(Args...)>;
+        };
+
         template<typename Ret, typename... Args>
-        func_info(std::function<Ret(Args...)> func, std::string n) : name(std::move(n)) {
-            thunk = [func = std::move(func)](cl_narg numargs, cl_va_list args) {
+        std::function<Ret(Args...)> stdfun(Ret(*fn)(Args...)) {
+            return { fn };
+        }
+
+        template<typename T>
+        auto stdfun(T&& fn) {
+            using realtype = typename std::remove_reference<T>::type;
+            return typename std_function_type<decltype(&realtype::operator())>::type { fn };
+        }
+
+        template<typename Ret, typename... Args>
+        auto functor_call_stdfunc_from_va_list(std::function<Ret(Args...)>&& func) {
+            return [func = std::move(func)](cl_narg numargs, cl_va_list args) {
                 return call_from_va_list<const std::function<Ret(Args...)>&, Args...>::call(func,
                                                                                             numargs,
                                                                                             args);
-                
             };
         }
+    }
 
-        std::function<cl_object(int, cl_va_list)> thunk;
+    struct func_info {
+        template<typename F>
+        func_info(F&& func, std::string n) : name(std::move(n)),
+                                             thunk(internal::functor_call_stdfunc_from_va_list(internal::stdfun(func)))
+        { }
 
         std::string name;
+        std::function<cl_object(int, cl_va_list)> thunk;
     };
 
     template<unsigned int FuncIndex>
@@ -181,33 +213,6 @@ namespace ict {
     template<typename Ret, typename... Args>
     Ret make_struct(Args&&... args) {
         return Ret { std::forward<Args>(args)... };
-    }
-
-    template<typename Ret, typename... Args>
-    std::function<Ret(Args...)> fun(Ret(*fn)(Args...)) {
-        return { fn };
-    }
-
-    template<typename T, typename Ret, typename... Args>
-    Ret ret_type(Ret(T::*)(Args...));
-
-    template<typename... Args>
-    struct std_function_type;
-
-    template<typename T, typename Ret, typename... Args>
-    struct std_function_type<Ret(T::*)(Args...)> {
-        using type = std::function<Ret(Args...)>;
-    };
-
-    template<typename T, typename Ret, typename... Args>
-    struct std_function_type<Ret(T::*)(Args...) const> {
-        using type = std::function<Ret(Args...)>;
-    };
-
-    template<typename T>
-    auto fun(T&& fn) {
-        using realtype = typename std::remove_reference<T>::type;
-        return typename std_function_type<decltype(&realtype::operator())>::type { fn };
     }
 }
 

@@ -26,10 +26,10 @@ extern "C" void ict_register() {
     int my_special_int = 42;
 
     ict::register_funcs({
-        { ict::fun(umap_get), "UMAP-GET" },
-        { ict::fun(umap_set), "UMAP-SET" },
-        { ict::fun(ict::make_struct<map_t>), "MAKE-UMAP" },
-        { ict::fun([my_special_int]() { return my_special_int; }), "MY-SPECIAL-INT" }
+        { umap_get,                                      "UMAP-GET" },
+        { umap_set,                                      "UMAP-SET" },
+        { ict::make_struct<map_t>,                       "MAKE-UMAP" },
+        { [my_special_int]() { return my_special_int; }, "MY-SPECIAL-INT" }
     });
 }
 
